@@ -15,7 +15,7 @@
 
 Відкрийте https://dash.cloudflare.com/ та увійдіть або створіть акаунт.
 
-У Cloudflare створіть D1 database з назвою **`voxbridge-db`**. Збережіть її **Database ID** (UUID, не пароль). Якщо для приватності потрібне розташування в ЄС, виберіть EU jurisdiction *під час створення*: потім змінити його не можна.
+База даних **`voxbridge-db`** вже створена власником, а її **Database ID** уже внесено безпосередньо в `wrangler.jsonc`. Нічого повторно створювати чи копіювати не потрібно.
 
 Знайдіть свій **Account ID** у Cloudflare Dashboard.
 
@@ -30,9 +30,6 @@
 - `CLOUDFLARE_ACCOUNT_ID` — Account ID із Cloudflare;
 - `CLOUDFLARE_API_TOKEN` — створений Cloudflare API token.
 
-У **Settings → Secrets and variables → Actions → Variables** додайте **Repository variable**:
-
-- `VOXBRIDGE_D1_DATABASE_ID` — Database ID бази `voxbridge-db`.
 
 **Не вставляйте жоден ключ у README, файли коду або чат.** Репозиторій наразі публічний.
 
@@ -40,7 +37,7 @@
 
 Відкрийте репозиторій → **Actions** → **Deploy VOXBRIDGE (manual)** → **Run workflow**.
 
-Автоматичний процес перевірить код, підставить Database ID тільки в тимчасовій копії, застосує SQL-міграції й спробує розгорнути Worker та статичний сайт. У разі помилки дивіться журнал конкретного кроку.
+Автоматичний процес перевірить код, використає вже прописаний у `wrangler.jsonc` Database ID, застосує SQL-міграції й спробує розгорнути Worker та статичний сайт. У разі помилки дивіться журнал конкретного кроку.
 
 Після успіху Wrangler покаже адресу на кшталт `https://voxbridge-mvp.<ваш-піддомен>.workers.dev`. Це приклад формату, **не поточна адреса запущеного сайту**.
 
