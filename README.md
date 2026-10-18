@@ -1,40 +1,43 @@
-# VOXBRIDGE — Voice translation through a private link
+# VOXBRIDGE — voice translation through a private link
 
-VOXBRIDGE is a mobile-first web app for two people who speak different languages. Each person records or types in their own language; the other sees an AI translation and can listen using the device's speech synthesis. No accounts or app installation required.
+**Zero-payment pilot:** Cloudflare Workers, D1 and Workers AI on the **Free** plan. No paid OpenAI API key, OpenAI API billing, subscription or card is needed for the AI models used here. The free Workers AI allowance is **10,000 neurons per day**; beyond it requests fail on the Free plan rather than incur a charge. Workers and D1 have separate Free limits.
 
-**Status:** working MVP source code. Seven mocked server tests plus static policy checks are verified in GitHub Actions. Real OpenAI voice translation and Cloudflare deployment have **not** yet been verified. This repository is currently **public**; never commit real secrets.
+**Status:** Code compiled and mocked tests passed in GitHub Actions, including Wrangler dry-run and local D1 migrations. Real Cloudflare production deployment and actual audio translation on iPhone/Android **are not yet confirmed**. No guarantee of uptime, every language pair or translation quality.
 
-## Features
-- 13 supported languages; English-first interface with Ukrainian toggle
-- Up to 25-second voice messages, plus text fallback
-- Separate private invitation links for creator and guest
-- OpenAI speech transcription and translation on the server
-- Cloudflare Workers + D1 for conversations and rate limits
-- Consent required before sending voice/text to AI
-- Conversation deletion by creator and automatic expiry after seven days
+## What it does
 
-## Developer quick start
-Requires Node.js 20+, a Cloudflare account and a separate funded OpenAI API key for real translations. ChatGPT subscription does not include OpenAI API usage.
+- Two people speaking different languages can exchange translated voice or typed messages via separate secret links, with no accounts.
+- Server-side audio transcription: Cloudflare-hosted `@cf/openai/whisper-large-v3-turbo` (not the billable OpenAI API).
+- Server-side multilingual text translation: Cloudflare-hosted `@cf/meta/m2m100-1.2b`.
+- Spoken playback via the recipient's device Speech Synthesis API, subject to language voices installed.
+- Cloudflare D1 retains text/translations for up to seven days; audio is processed but not stored by this application.
+- Up to 25-second clips; conservative daily request limits and consent before sending.
+- First version supports 13 selectable languages; actual recognition/translation support must be tested per browser and pair.
+
+## Launch
+
+**For the owner:** [Zero-payment setup in Ukrainian](DEPLOY-UK.md).
+
+For local development:
 
 ```sh
 npm install
-npx wrangler login
-npx wrangler d1 create voxbridge-db
-```
-
-Copy the returned D1 database ID into `wrangler.jsonc`, then copy `.dev.vars.example` to `.dev.vars` and fill in `OPENAI_API_KEY`, `RATE_LIMIT_SALT`, and `LINK_SECRET`. **Never push `.dev.vars`.**
-
-```sh
+cp .dev.vars.example .dev.vars
+# Fill RATE_LIMIT_SALT and LINK_SECRET with two independent long random values.
 npm run db:local
 npm run check
 npm run dev
 ```
 
-For remote deployment, set the three secrets with `npx wrangler secret put <SECRET_NAME>`, then run `npm run db:remote` and `npm run deploy`. Review the privacy policy, testing and abuse limits first.
+The D1 database is configured in `wrangler.jsonc`; Wrangler local AI binding may connect to Cloudflare-hosted inference and requires correct development authentication. Never commit `.dev.vars`.
 
-**For an owner who does not want to use the terminal:** follow the [Ukrainian one-time Cloudflare setup](DEPLOY-UK.md), then run [Deploy VOXBRIDGE (manual)](../../actions/workflows/deploy.yml). Deployment never runs automatically on a push.
+[GitHub CI](../../actions/workflows/ci.yml) runs syntax checks, mocked AI tests, local D1 migrations and a Wrangler deployment dry-run. [Manual Cloudflare deploy](../../actions/workflows/deploy.yml) only runs when deliberately invoked after secret setup.
 
-See [Ukrainian developer setup and limitations](README-UK.md) and [coding/deployment checklist](CODER-BRIEF-EN.md).
+## Key limits and privacy
 
-## Important
-Private links are **not** end-to-end encryption. Text messages remain in D1 until deletion/expiry (up to seven days); audio is processed by OpenAI, not stored by this app. Do not use it for emergencies or highly sensitive information.
+- **No end-to-end encryption** and no identity verification: anyone with a private link can read the respective room.
+- AI processes text/voice through Cloudflare Workers AI; it does not guarantee correct translations or availability.
+- Code tests mock the models; real speech recordings in WebM/MP4 require live verification. If speech processing fails, typed text remains an alternative.
+- No payments, user accounts, CAPTCHA, external pentest or legally finalized privacy notice yet. Do not announce a commercial release.
+
+For full details see [README-UK.md](README-UK.md).
