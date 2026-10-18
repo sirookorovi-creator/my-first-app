@@ -2,7 +2,7 @@
 
 VOXBRIDGE is a mobile-first web app for two people who speak different languages. Each person records or types in their own language; the other sees an AI translation and can listen using the device's speech synthesis. No accounts or app installation required.
 
-**Status:** working MVP source code. Five mocked server tests passed locally. Real OpenAI voice translation and Cloudflare deployment have **not** yet been verified. This repository is currently **public**; never commit real secrets.
+**Status:** working MVP source code. Seven mocked server tests plus static policy checks are verified in GitHub Actions. Real OpenAI voice translation and Cloudflare deployment have **not** yet been verified. This repository is currently **public**; never commit real secrets.
 
 ## Features
 - 13 supported languages; English-first interface with Ukrainian toggle
@@ -32,7 +32,9 @@ npm run dev
 
 For remote deployment, set the three secrets with `npx wrangler secret put <SECRET_NAME>`, then run `npm run db:remote` and `npm run deploy`. Review the privacy policy, testing and abuse limits first.
 
-See [Ukrainian setup and limitations](README-UK.md) and [coding/deployment checklist](CODER-BRIEF-EN.md).
+**For an owner who does not want to use the terminal:** follow the [Ukrainian one-time Cloudflare setup](DEPLOY-UK.md), then run [Deploy VOXBRIDGE (manual)](../../actions/workflows/deploy.yml). Deployment never runs automatically on a push.
+
+See [Ukrainian developer setup and limitations](README-UK.md) and [coding/deployment checklist](CODER-BRIEF-EN.md).
 
 ## Important
 Private links are **not** end-to-end encryption. Text messages remain in D1 until deletion/expiry (up to seven days); audio is processed by OpenAI, not stored by this app. Do not use it for emergencies or highly sensitive information.
