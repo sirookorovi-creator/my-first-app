@@ -29,6 +29,8 @@ const JSON_HEADERS = {
 const NOW = () => Math.floor(Date.now() / 1000);
 const DAY = () => new Date().toISOString().slice(0, 10);
 const MAX_AUDIO_BYTES = 3_000_000;
+const MAX_JSON_BYTES = 4_096;
+const MAX_FORM_BYTES = MAX_AUDIO_BYTES + 100_000;
 const MAX_TEXT_LENGTH = 500;
 const allowedAudioTypes = new Set(['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav', 'audio/x-wav']);
 
@@ -71,9 +73,37 @@ async function getAuthorizedRoom(token, db) {
 const messageInfo = m => ({ id: m.id, speaker: m.speaker, original: m.original_text,
   translated: m.translated_text, createdAt: m.created_at });
 
+class PayloadTooLargeError extends Error {}
+async function boundedRequestBody(request, maxBytes) {
+  const declared = request.headers.get('content-length');
+  if (declared && (!/^\d+$/.test(declared) || Number(declared) > maxBytes))
+    throw new PayloadTooLargeError();
+  if (!request.body) throw new Error('Missing request body.');
+  const reader = request.body.getReader();
+  let bytes = 0;
+  const chunks = [];
+  try {
+    while (true) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > maxBytes) {
+        await reader.cancel().catch(() => {});
+        throw new PayloadTooLargeError();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return new Response(new Blob(chunks), {
+    headers: {'content-type': request.headers.get('content-type') || ''}
+  });
+}
 async function parseJSON(request) {
-  if (!(request.headers.get('content-type') || '').includes('application/json')) throw new Error('Expected JSON request.');
-  return request.json();
+  if (!(request.headers.get('content-type') || '').includes('application/json'))
+    throw new Error('Expected JSON request.');
+  return (await boundedRequestBody(request, MAX_JSON_BYTES)).json();
 }
 
 async function openaiJSON(url, apiKey, options) {
@@ -129,7 +159,9 @@ async function translateText(text, from, to, key) {
 
 async function createRoom(request, env) {
   let data;
-  try { data = await parseJSON(request); } catch { return fail('Invalid JSON.'); }
+  try { data = await parseJSON(request); }
+  catch (e) { return e instanceof PayloadTooLargeError ? fail('Request body is too large.',413) : fail('Invalid JSON.'); }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return fail('Invalid JSON.');
   const ownerLang = String(data.ownerLanguage || 'uk');
   const guestLang = String(data.guestLanguage || 'en');
   if (!LANGS[ownerLang] || !LANGS[guestLang] || ownerLang === guestLang)
@@ -167,6 +199,33 @@ async function addMessage(token, request, env) {
     return fail('AI is not configured on this server. Add OPENAI_API_KEY to the Worker secrets.',503);
   if (!env.RATE_LIMIT_SALT || env.RATE_LIMIT_SALT.length < 20)
     return fail('Server security settings are incomplete.',503);
+  // Validate the body before spending a user's daily AI quota.
+  const from = auth.role === 'owner' ? auth.room.owner_lang : auth.room.guest_lang;
+  const to = auth.role === 'owner' ? auth.room.guest_lang : auth.room.owner_lang;
+  let transcript, audioFile = null;
+  const ctype = request.headers.get('content-type') || '';
+  if (ctype.includes('application/json')) {
+    let data;
+    try { data = await parseJSON(request); }
+    catch (e) { return e instanceof PayloadTooLargeError ? fail('Request body is too large.',413) : fail('Invalid JSON.'); }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return fail('Invalid JSON.');
+    if (data.consent !== true) return fail('You must consent to AI processing before sending.');
+    if (typeof data.text !== 'string') return fail('Write a message up to 500 characters.');
+    transcript = data.text.trim();
+    if (!transcript || transcript.length > MAX_TEXT_LENGTH) return fail('Write a message up to 500 characters.');
+  } else if (ctype.includes('multipart/form-data')) {
+    let form;
+    try { form = await (await boundedRequestBody(request, MAX_FORM_BYTES)).formData(); }
+    catch (e) { return e instanceof PayloadTooLargeError ? fail('Audio file is too large.',413) : fail('Could not read audio recording.'); }
+    if (form.get('consent') !== 'yes') return fail('You must consent to AI processing before sending.');
+    const file = form.get('audio');
+    if (!(file instanceof File)) return fail('Audio recording missing.');
+    const type = (file.type || '').split(';')[0];
+    if (!allowedAudioTypes.has(type)) return fail('Unsupported audio format.');
+    if (file.size < 500 || file.size > MAX_AUDIO_BYTES) return fail('Audio must be between 500 bytes and 3 MB.',413);
+    audioFile = file;
+  } else return fail('Send JSON text or multipart audio.');
+
   const total = await env.DB.prepare('SELECT COUNT(*) AS amount FROM messages WHERE room_id = ?').bind(auth.room.id).first();
   if ((total?.amount||0) >= numberSetting(env,'MAX_MESSAGES_PER_ROOM',20,2,200))
     return fail('This conversation reached its message limit.',429);
@@ -175,32 +234,10 @@ async function addMessage(token, request, env) {
     return fail('Daily message limit reached. Try again tomorrow.',429);
   if (!(await rateLimit(env.DB,'global-ai','all',numberSetting(env,'MAX_DAILY_AI_MESSAGES',25,1,10000))))
     return fail('Daily AI budget reached. Try again tomorrow.',429);
-
-  const from = auth.role === 'owner' ? auth.room.owner_lang : auth.room.guest_lang;
-  const to = auth.role === 'owner' ? auth.room.guest_lang : auth.room.owner_lang;
-  let transcript;
-  const ctype = request.headers.get('content-type') || '';
-  if (ctype.includes('application/json')) {
-    let data;
-    try { data = await request.json(); } catch { return fail('Invalid JSON.'); }
-    if (data.consent !== true) return fail('You must consent to AI processing before sending.');
-    transcript = String(data.text || '').trim();
-    if (!transcript || transcript.length > MAX_TEXT_LENGTH) return fail('Write a message up to 500 characters.');
-  } else if (ctype.includes('multipart/form-data')) {
-    // Reject oversized uploads before parsing, when content-length is present.
-    const length = Number(request.headers.get('content-length') || 0);
-    if (length > MAX_AUDIO_BYTES + 100_000) return fail('Audio file is too large.',413);
-    let form;
-    try { form = await request.formData(); } catch { return fail('Could not read audio recording.'); }
-    if (form.get('consent') !== 'yes') return fail('You must consent to AI processing before sending.');
-    const file = form.get('audio');
-    if (!(file instanceof File)) return fail('Audio recording missing.');
-    const type = (file.type || '').split(';')[0];
-    if (!allowedAudioTypes.has(type)) return fail('Unsupported audio format.');
-    if (file.size < 500 || file.size > MAX_AUDIO_BYTES) return fail('Audio must be between 500 bytes and 3 MB.',413);
-    try { transcript = await transcribeAudio(file,from,env.OPENAI_API_KEY); }
+  if (audioFile) {
+    try { transcript = await transcribeAudio(audioFile,from,env.OPENAI_API_KEY); }
     catch(e) { return fail(e.message,502); }
-  } else return fail('Send JSON text or multipart audio.');
+  }
 
   let translated;
   try { translated = await translateText(transcript,from,to,env.OPENAI_API_KEY); }
