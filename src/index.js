@@ -332,4 +332,4 @@ export default {
   }
 };
 
-export const testable = {sha256, randomToken, numberSetting, translateText, transcribeAudio, rateLimit, LANGS};
+export const testable = {sha256, randomToken, numberSetting, translateText, transcribeAudio, rateLimit, encodeAudioBase64, LANGS};
