@@ -44,27 +44,32 @@ class MockStatement {
     throw Error('Unhandled run SQL: '+this.sql);
   }
 }
+const aiCalls=[];
+const cloudflareTestAI = {
+  async run(model, input) {
+    aiCalls.push({model,input});
+    if (model === '@cf/openai/whisper-large-v3-turbo') {
+      assert.match(input.audio,/^[a-zA-Z0-9+/]+={0,2}$/);
+      assert.equal(input.task,'transcribe');
+      return {text:'Привіт, як справи?'};
+    }
+    if (model === '@cf/meta/m2m100-1.2b') {
+      assert.ok(input.source_lang && input.target_lang);
+      return {translated_text:input.target_lang === 'en'?'Hello, how are you?':'Добре, дякую!'};
+    }
+    throw new Error('Unexpected Cloudflare AI model '+model);
+  }
+};
 const env = ()=>({
+  AI:cloudflareTestAI,
   DB:new MockDB(), RATE_LIMIT_SALT:'test-rate-limit-salt-is-long-secret',
   LINK_SECRET:'test-link-secret-is-long-enough-for-aes',
-  OPENAI_API_KEY:'sk-test-not-real',
   ASSETS:{fetch:async()=>new Response('html ok',{status:200})},
   MAX_DAILY_AI_MESSAGES:'25',MAX_DAILY_NEW_ROOMS_PER_IP:'3',MAX_DAILY_MESSAGES_PER_IP:'8',MAX_MESSAGES_PER_ROOM:'20',ROOM_LIFETIME_DAYS:'7'
 });
 const url = path=>`https://voxbridge.example${path}`;
 const request = (path,method='GET',body=undefined,headers=undefined)=>new Request(url(path),{method,body,headers});
 const toJSON = (path,body)=>request(path,'POST',JSON.stringify(body),{'content-type':'application/json'});
-const originalFetch=globalThis.fetch;
-const aiCalls=[];
-globalThis.fetch=async (url,options)=>{
-  aiCalls.push(String(url));
-  if(String(url).endsWith('/audio/transcriptions'))return Response.json({text:'Привіт, як справи?'});
-  if(String(url).endsWith('/chat/completions')){
-    const prompt=JSON.parse(options.body).messages[0].content;
-    return Response.json({choices:[{message:{content:prompt.includes('into English')?'Hello, how are you?':'Добре, дякую!'}}]});
-  }
-  throw Error('Unexpected fetch '+url);
-};
 
 test('token entropy, deterministic hashes and safe configuration',async()=>{
   assert.match(testable.randomToken(),/^[0-9a-f]{64}$/);
@@ -110,13 +115,14 @@ test('create, share, translate both directions, reload, delete, and privacy',asy
   assert.equal(res.status,404);
 });
 
-test('audio reaches transcription endpoint and translation endpoint',async()=>{
+test('audio reaches Cloudflare speech and translation models',async()=>{
   const e=env();const created=await (await worker.fetch(toJSON('/api/rooms',{ownerLanguage:'uk',guestLanguage:'en'}),e)).json();
   const form=new FormData();form.append('consent','yes');form.append('audio',new Blob([new Uint8Array(1024)],{type:'audio/webm'}),'sample.webm');
   const res=await worker.fetch(request(`/api/session/${created.ownerToken}/messages`,'POST',form),e);
   assert.equal(res.status,201);
   assert.equal((await res.json()).message.original,'Привіт, як справи?');
-  assert.ok(aiCalls.some(s=>s.endsWith('audio/transcriptions')));
+  assert.ok(aiCalls.some(c=>c.model==='@cf/openai/whisper-large-v3-turbo'));
+  assert.ok(aiCalls.some(c=>c.model==='@cf/meta/m2m100-1.2b'));
 });
 
 test('invalid requests, self-service limits, and expired links',async()=>{
@@ -167,4 +173,15 @@ test('new-room API rejects invalid JSON types and oversized bodies cleanly', asy
   assert.equal((await worker.fetch(toJSON('/api/rooms',[]), e)).status, 400);
   assert.equal((await worker.fetch(request('/api/rooms','POST','x'.repeat(20_000),{'content-type':'application/json'}),e)).status, 413);
   assert.equal((await worker.fetch(toJSON('/api/rooms',{ownerLanguage:'uk',guestLanguage:'en'}), e)).status, 201);
+});
+
+test('no paid OpenAI key needed, AI binding is required', async () => {
+  const e=env();
+  delete e.AI;
+  const response=await worker.fetch(toJSON('/api/rooms',{ownerLanguage:'uk',guestLanguage:'en'}),e);
+  assert.equal(response.status,201);
+  const data=await response.json();
+  const message=await worker.fetch(toJSON('/api/session/'+data.ownerToken+'/messages',{text:'Hello',consent:true}),e);
+  assert.equal(message.status,503);
+  assert.match((await message.json()).error,/Cloudflare AI/);
 });
