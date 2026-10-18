@@ -206,3 +206,21 @@ test('a late room creation cannot replace a conversation opened in the meantime'
   request.reply({ownerToken:'created',guestToken:'invitation'});await creating;
   assert.equal(client.state().token,'existing');assert.equal(requests.length,0);
 });
+
+test('Enter used to confirm an IME composition does not send unfinished text',async()=>{
+  const {nodes,requests,open}=browser();
+  await open('a');nodes.get('consent').checked=true;
+  const input=nodes.get('textInput');input.value='\u65e5';
+  let prevented=false;
+  input.handlers.keydown({key:'Enter',isComposing:true,preventDefault(){prevented=true}});
+  assert.equal(prevented,false,'the browser must be allowed to finish the composition');
+  assert.equal(requests.length,0,'unfinished IME text must not be sent');
+
+  input.value='\u65e5\u672c\u8a9e';
+  input.handlers.keydown({key:'Enter',isComposing:false,preventDefault(){prevented=true}});
+  const request=requests.shift();
+  assert.equal(request.path,'/api/session/a/messages');
+  assert.equal(JSON.parse(request.options.body).text,'\u65e5\u672c\u8a9e');
+  request.reply({message:message('Japanese')});
+  await Promise.resolve();
+});
