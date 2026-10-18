@@ -10,10 +10,32 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Check JavaScript syntax and run mocked server tests
+
+      - name: Install Wrangler
+        run: npm install --no-audit --no-fund
+
+      - name: Check JavaScript and run mocked server tests
         run: npm run check
+
+      - name: Prepare harmless test-only D1 binding
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const config = JSON.parse(fs.readFileSync("wrangler.jsonc", "utf8"));
+            const db = config.d1_databases.find(x => x.binding === "DB");
+            if (!db) throw new Error("Missing D1 database binding");
+            db.database_id = "00000000-0000-4000-8000-000000000000";
+            fs.writeFileSync("wrangler.jsonc", JSON.stringify(config, null, 2));
+          '
+
+      - name: Validate D1 migrations locally
+        run: npx wrangler d1 migrations apply voxbridge-db --local
+
+      - name: Compile Cloudflare Worker and static assets without deploying
+        run: npx wrangler deploy --dry-run --outdir .dry-run
