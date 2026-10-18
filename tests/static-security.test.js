@@ -35,3 +35,15 @@ test('chat polling stays within the free Workers request budget', () => {
   assert.match(script,/setInterval\(refreshIfVisible,30000\)/);
   assert.doesNotMatch(script,/setInterval\(refreshIfVisible,8000\)/);
 });
+
+test('owner instructions match the automated zero-payment deployment path', () => {
+  const ukrainian = readFileSync(new URL('../README-UK.md',import.meta.url),'utf8');
+  const deployment = readFileSync(new URL('../DEPLOY-UK.md',import.meta.url),'utf8');
+  for (const text of [ukrainian,deployment]) {
+    assert.match(text,/CLOUDFLARE_API_TOKEN/);
+    assert.doesNotMatch(text,/OPENAI_API_KEY` (?:потрібен|required)/);
+  }
+  assert.doesNotMatch(ukrainian,/секрети.*CLOUDFLARE_ACCOUNT_ID/s);
+  assert.match(ukrainian,/створить лише відсутні/);
+  assert.match(deployment,/Створює відсутні випадкові `LINK_SECRET` та `RATE_LIMIT_SALT`/);
+});

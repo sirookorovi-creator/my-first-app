@@ -31,7 +31,7 @@ npm run dev
 
 The D1 database is configured in `wrangler.jsonc`; Wrangler local AI binding may connect to Cloudflare-hosted inference and requires correct development authentication. Never commit `.dev.vars`.
 
-[GitHub CI](../../actions/workflows/ci.yml) runs syntax checks, mocked AI tests, local D1 migrations and a Wrangler deployment dry-run. [Manual Cloudflare deploy](../../actions/workflows/deploy.yml) only runs when deliberately invoked after secret setup.
+[GitHub CI](../../actions/workflows/ci.yml) runs syntax checks, mocked AI tests, local D1 migrations and a Wrangler deployment dry-run. [Cloudflare deployment](../../actions/workflows/deploy.yml) runs for `main` updates and can also be started manually after the single required repository secret, `CLOUDFLARE_API_TOKEN`, is configured.
 
 ## Key limits and privacy
 

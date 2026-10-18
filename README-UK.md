@@ -19,11 +19,13 @@
 Покрокова [інструкція українською](DEPLOY-UK.md). База `voxbridge-db` уже створена власником, її ID записаний у `wrangler.jsonc`.
 
 1. Cloudflare: залишити **Workers Free**, платний тариф не вмикати.
-2. Створити обмежений Cloudflare API token, дізнатися Account ID.
-3. У GitHub зберегти **секрети** `CLOUDFLARE_ACCOUNT_ID` та `CLOUDFLARE_API_TOKEN` (не публікувати).
-4. Запустити вручну **Deploy VOXBRIDGE (manual)** у вкладці GitHub Actions.
-5. У Cloudflare Worker додати **два різні секрети** `RATE_LIMIT_SALT` (20+ символів) і `LINK_SECRET` (24+ символи). Ніякого `OPENAI_API_KEY` не треба.
-6. Протестувати спочатку текстовий переклад, потім голос на реальних телефонах.
+2. Створити обмежений Cloudflare API token за дозволами з `DEPLOY-UK.md`.
+3. У GitHub зберегти лише repository secret `CLOUDFLARE_API_TOKEN` — не надсилати його в чат і не додавати у файли.
+4. Перезапустити **Deploy VOXBRIDGE**. Надалі кожне оновлення `main` запускає deployment автоматично.
+5. Сценарій сам збереже наявні `LINK_SECRET` і `RATE_LIMIT_SALT` або безпечно створить лише відсутні. Не створюйте й не замінюйте їх вручну.
+6. Дочекатися live smoke-перевірки тексту та синтетичного аудіо, а потім окремо перевірити мікрофон і озвучення на реальних iPhone/Android.
+
+Account ID та D1 database ID уже зафіксовані у `wrangler.jsonc`. Окремі GitHub secrets для них і `OPENAI_API_KEY` не потрібні.
 
 ### Для розробника локально
 ```sh
