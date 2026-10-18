@@ -7,13 +7,15 @@
     "directory": "./public",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": [
+      "/api/*"
+    ]
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "voxbridge-db",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+      "database_id": "b39140d9-b8a5-4ca0-9cee-73b9c1be26f7"
     }
   ],
   "vars": {
@@ -24,6 +26,8 @@
     "ROOM_LIFETIME_DAYS": "7"
   },
   "triggers": {
-    "crons": ["0 4 * * *"]
+    "crons": [
+      "0 4 * * *"
+    ]
   }
 }
