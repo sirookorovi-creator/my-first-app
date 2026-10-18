@@ -26,6 +26,53 @@ const JSON_HEADERS = {
   'X-Frame-Options': 'DENY',
   'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'"
 };
+
+const databaseInitialization = new WeakMap();
+// For a brand-new Cloudflare D1 database, initialize the schema on first API
+// request. No D1 admin token or paid service is needed in Workers Builds.
+async function ensureDatabaseSchema(db) {
+  let job = databaseInitialization.get(db);
+  if (!job) {
+    job = (async () => {
+      const present = await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'rooms'").first();
+      if (present) return;
+      await db.exec(`
+CREATE TABLE IF NOT EXISTS rooms (
+  id TEXT PRIMARY KEY,
+  owner_token_hash TEXT NOT NULL UNIQUE,
+  guest_token_hash TEXT NOT NULL UNIQUE,
+  guest_token_enc TEXT NOT NULL,
+  owner_lang TEXT NOT NULL,
+  guest_lang TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rooms_expires ON rooms(expires_at);
+CREATE TABLE IF NOT EXISTS messages (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  speaker TEXT NOT NULL CHECK(speaker IN ('owner','guest')),
+  original_text TEXT NOT NULL,
+  translated_text TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_messages_room_created ON messages(room_id,created_at);
+CREATE TABLE IF NOT EXISTS limits (
+  scope TEXT NOT NULL,
+  key TEXT NOT NULL,
+  day TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (scope, key, day)
+);`);
+    })().catch(error => {
+      databaseInitialization.delete(db);  // Permit retry if D1 has an outage.
+      throw error;
+    });
+    databaseInitialization.set(db, job);
+  }
+  return job;
+}
+
 const NOW = () => Math.floor(Date.now() / 1000);
 const DAY = () => new Date().toISOString().slice(0, 10);
 const MAX_AUDIO_BYTES = 3_000_000;
@@ -272,10 +319,14 @@ export default {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     if (!env.DB) return fail('Database not configured.',503);
-    try { return await route(url,request,env); }
+    try {
+      await ensureDatabaseSchema(env.DB);
+      return await route(url,request,env);
+    }
     catch(error) { console.error('Server error', error?.name || 'unknown'); return fail('Unexpected server error.',500); }
   },
   async scheduled(event,env) {
+    await ensureDatabaseSchema(env.DB);
     await env.DB.prepare('DELETE FROM rooms WHERE expires_at <= ?').bind(NOW()).run();
     await env.DB.prepare('DELETE FROM limits WHERE day < ?').bind(new Date(Date.now()-2*86400000).toISOString().slice(0,10)).run();
   }
