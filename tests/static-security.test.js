@@ -29,3 +29,9 @@ test('first-launch schema remains synchronized with SQL migration', () => {
   const normalize = value => value.replace(/\s+/g,' ').replace(/\s*([(),;=])\s*/g,'$1').trim();
   assert.equal(normalize(embedded[1]), normalize(migration));
 });
+
+test('chat polling stays within the free Workers request budget', () => {
+  const script=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
+  assert.match(script,/setInterval\(refreshIfVisible,30000\)/);
+  assert.doesNotMatch(script,/setInterval\(refreshIfVisible,8000\)/);
+});
