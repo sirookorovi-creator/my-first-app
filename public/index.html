@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#09121c" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="description" content="Speak your language. Let others hear and reply in theirs. Translate voice messages through a private link, no app required." />
+  <title>VOXBRIDGE — Speak without borders</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="/app.js" type="module" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" id="brand" aria-label="VOXBRIDGE home">
+      <span class="brand-icon" aria-hidden="true">≋</span>
+      <span>VOX<span class="brand-accent">BRIDGE</span></span>
+    </a>
+    <div class="top-right"><span class="eyebrow top-tag" data-i18n="topTag">VOICE × TRANSLATION</span><button id="uiToggle" class="lang-ui" title="Change interface language">UA</button></div>
+  </header>
+
+  <main class="page">
+    <section id="home" class="home-layout">
+      <div class="hero-copy">
+        <div class="eyebrow hero-eyebrow"><span class="pulse-dot"></span> <span data-i18n="heroLabel">AI VOICE MESSAGING</span></div>
+        <h1 id="heroHeading">Speak in yours.<br><em>Hear in theirs.</em></h1>
+        <p class="hero-sub" data-i18n="heroSub">Send a voice message in your language. They hear the translation and reply in their own. One private link. No app to install.</p>
+        <div class="hero-steps">
+          <div><span class="step-no">01</span><span data-i18n="step1">Record a message</span></div>
+          <div><span class="step-no">02</span><span data-i18n="step2">Send a private link</span></div>
+          <div><span class="step-no">03</span><span data-i18n="step3">Get a translated reply</span></div>
+        </div>
+        <p class="fine-print" data-i18n="finePrint">Beta · Voice-to-text translation · Device-generated speech · Messages expire after 7 days</p>
+      </div>
+      <section class="form-card" aria-labelledby="createTitle">
+        <div class="card-eyebrow" data-i18n="newLabel">NEW CONVERSATION</div>
+        <h2 id="createTitle" data-i18n="createTitle">Bridge two languages.</h2>
+        <p class="card-copy" data-i18n="createCopy">Choose your language and theirs. You'll get a link to send to the other person.</p>
+        <label class="field-label" for="ownerLanguage" data-i18n="iSpeak">I speak</label>
+        <select id="ownerLanguage"></select>
+        <div class="swap-wrap"><button id="swapLang" aria-label="Swap languages" title="Swap languages" class="swap-btn">⇅</button></div>
+        <label class="field-label" for="guestLanguage" data-i18n="theySpeak">They speak</label>
+        <select id="guestLanguage"></select>
+        <button id="createButton" class="primary-btn"><span data-i18n="createButton">Create conversation</span><span>→</span></button>
+        <p class="card-disclaimer" data-i18n="cardDisclaimer">A private link is the key to this conversation. Only share it with people you trust.</p>
+      </section>
+    </section>
+
+    <section id="conversation" class="room-layout hidden" aria-labelledby="roomTitle">
+      <div class="room-head">
+        <div><span class="eyebrow">PRIVATE VOICE BRIDGE</span><h1 id="roomTitle">Your conversation</h1><p id="roomHint" class="muted">Share the link to start talking.</p></div>
+        <button id="newChat" class="text-btn" data-i18n="newChat">+ New conversation</button>
+      </div>
+      <div class="room-grid">
+        <section class="chat-card" aria-label="Messages">
+          <div class="chat-top"><div class="chat-languages" id="chatLanguages"></div><span class="live-indicator">● Private link</span></div>
+          <div id="chatMessages" class="chat-messages" aria-live="polite"><div class="empty-chat"><span class="empty-icon">◎</span><h3>Ready to cross the language barrier?</h3><p>Record a message or type below. It will appear here translated for the other person.</p></div></div>
+          <div class="compose">
+            <div id="recStatus" class="rec-status hidden" role="status">● Recording... <span id="recSeconds">0:00</span> / 0:25</div>
+            <label class="consent-label"><input id="consent" type="checkbox"/><span data-i18n="consentText">I agree to have my voice/text processed by an external AI provider for transcription and translation.</span></label>
+            <div class="record-line"><button id="recordButton" class="record-btn" aria-label="Start recording">🎙</button><div class="record-note"><strong id="recordLabel">Tap to record</strong><span id="recordHelp">Up to 25 seconds · microphone required</span></div></div>
+            <div class="type-line"><input id="textInput" maxlength="500" autocomplete="off" placeholder="Or type a message..." aria-label="Text message"/><button id="sendText" class="send-btn">Send ↑</button></div>
+            <div id="busyBar" class="busy hidden">Processing your message securely...</div>
+            <p id="composeNote" class="form-note" data-i18n="composeNote">AI translation may contain errors. Check important details independently.</p>
+          </div>
+        </section>
+        <aside class="share-card">
+          <div class="card-eyebrow">SHARE & REPLY</div>
+          <h2 id="shareTitle">Bring someone in.</h2>
+          <p id="shareHelp">Send this link. They can listen to the translated message and respond without creating an account.</p>
+          <button id="copyLink" class="primary-btn"><span>Copy invitation link</span><span>↗</span></button>
+          <button id="nativeShare" class="outline-btn hidden" data-i18n="nativeShare">Share with another app</button>
+          <div class="share-separator"></div>
+          <div class="info-row"><span>Conversation expires</span><strong id="expiry">—</strong></div>
+          <div class="info-row"><span>Your language</span><strong id="myLang">—</strong></div>
+          <div class="info-row"><span>Their language</span><strong id="otherLang">—</strong></div>
+          <div class="share-separator"></div>
+          <p class="privacy-note">🔒 Messages are visible to anyone holding the appropriate private link. Audio is processed, not stored. You can delete the conversation if you created it.</p>
+          <button id="deleteChat" class="danger-link hidden" data-i18n="deleteChat">Delete conversation and messages</button>
+        </aside>
+      </div>
+    </section>
+  </main>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <footer>VOXBRIDGE BETA <span>·</span> <a href="/privacy.html" rel="noreferrer" data-i18n="privacyLink">Privacy & data</a> <span>·</span> NO INSTALL. JUST UNDERSTANDING.</footer>
+</body>
+</html>
