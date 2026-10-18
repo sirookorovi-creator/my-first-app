@@ -1,55 +1,56 @@
-# VOXBRIDGE — публікація з Cloudflare без оплати й без API-токенів
+# VOXBRIDGE — розгортання через GitHub Actions
 
-**Стан:** код на GitHub і перевірений автоматичними тестами. Cloudflare D1 `voxbridge-db` уже створена, її ID вказано в `wrangler.jsonc`. Публічний сайт ще не підтверджено.
+Ваш уже авторизований звичайний браузер потрібний лише для одноразового створення токена й збереження його в GitHub. Вхід у віддалений браузер ChatGPT не потрібний.
 
-## Найпростіший спосіб: вбудоване підключення GitHub у Cloudflare
+## Уже налаштовано
 
-Цей спосіб **не вимагає шукати Account ID**, створювати API-токени вручну чи вставляти SQL у базу. Cloudflare Workers Builds сам створює службовий токен під час підключення GitHub; у Cloudflare Free це можливо без платної підписки.
+- Репозиторій: `sirookorovi-creator/my-first-app`, гілка `main`.
+- Cloudflare Account ID: `f3dd4d2ecfdd0c89fdb864b0cb4e6dff` — уже в `wrangler.jsonc`.
+- Worker: `voxbridge-mvp`, безкоштовна адреса `*.workers.dev`.
+- База `voxbridge-db`: `b39140d9-b8a5-4ca0-9cee-73b9c1be26f7`.
+- Розпізнавання й переклад: Workers AI. OpenAI API-ключ не використовується.
 
-1. Відкрийте https://dash.cloudflare.com/ і зайдіть у **Workers & Pages**.
-2. Натисніть **Create application**.
-3. Виберіть **GitHub** / **Import a repository** (залежно від вигляду кабінету).
-4. Якщо з'явиться запит, дозвольте Cloudflare доступ **лише до репозиторію `my-first-app`** свого GitHub-акаунта.
-5. Виберіть **`sirookorovi-creator/my-first-app`**, гілку **`main`**. Назва Worker має відповідати `voxbridge-mvp` із `wrangler.jsonc`.
-6. У налаштуваннях збірки: **Build command** = `npm run build` (або залиште автоматично визначений), **Deploy command** = `npx wrangler deploy`, **Root directory** = корінь репозиторію.
-7. Оберіть безкоштовний Workers Free і **Save and Deploy**. Якщо сервіс просить оплату або перехід на Paid — зупиніться і надішліть скриншот; платний план не потрібний для тесту.
+## Потрібна авторизація: токен Cloudflare у GitHub Secrets
 
-Після цього Cloudflare опублікує сайт на адресі `*.workers.dev` і налаштує дві прив'язки з конфігурації: **D1 DB** та **Workers AI**.
+1. У своєму відкритому кабінеті Cloudflare відкрийте **Account API Tokens → Create Token → Custom token**. Назва — `VOXBRIDGE GitHub Deploy`.
+2. Обмежте ресурси акаунтом `Roma.siroochenko@gmail.com` і додайте дозволи:
 
-**База даних:** Worker автоматично створить відсутні таблиці за першого API-запиту (використовує `CREATE TABLE IF NOT EXISTS`, без видалення даних). Окремі міграції вручну для початкового запуску більше не потрібні. Папка `migrations/` зберігається для майбутніх версій.
+   | Ресурс | Дозвіл | Рівень |
+   | --- | --- | --- |
+   | Account | Workers Scripts | Edit / Write |
+   | Account | D1 | Edit / Write |
+   | Account | Workers AI | Read |
 
-## Після першого розгортання: два секрети Cloudflare
+   Якщо інтерфейс використовує нові ролі Workers, створення першого Worker потребує **Workers Admin** на рівні продукту цього акаунта. Після першого запуску токен можна звузити до `voxbridge-mvp`. Доступ до DNS, оплати та інших акаунтів не потрібний.
+3. Створіть токен і скопіюйте його. **Не надсилайте значення в чат і не додавайте у файли репозиторію.**
+4. GitHub → репозиторій → **Settings → Secrets and variables → Actions → New repository secret**:
+   - **Name:** `CLOUDFLARE_API_TOKEN`
+   - **Secret:** скопійований токен.
+   - Натисніть **Add secret**.
 
-Перейдіть у **Workers & Pages → voxbridge-mvp → Settings → Variables and Secrets**. Додайте як **Secrets**:
-- `RATE_LIMIT_SALT` — випадковий рядок щонайменше 20 символів.
-- `LINK_SECRET` — інший випадковий рядок щонайменше 24 символи.
+Після цього перезапустіть невдалий запуск **Deploy VOXBRIDGE**, або відкрийте **Actions → Deploy VOXBRIDGE → Run workflow** для `main`. Надалі зміни в `main` запускають розгортання автоматично. Окремий секрет Account ID не потрібний.
 
-На Mac можна двічі виконати `openssl rand -hex 32`; значення мають бути **різними**. Нікому їх не показуйте й не вставляйте у публічний GitHub. **Не змінюйте LINK_SECRET** для чинної бази без плану міграції: власники вже створених розмов можуть утратити доступ до відновлення запрошень.
+## Що GitHub робить автоматично
 
-**OpenAI API-ключ не потрібний і не використовується.**
+1. Перевіряє JavaScript і запускає тести.
+2. Зберігає наявний піддомен `workers.dev`; якщо його ще немає — реєструє `voxbridge-<перші 12 символів Account ID>`.
+3. Застосовує SQL-міграцію D1 без видалення чинних даних і розгортає Worker зі статичними файлами.
+4. Створює відсутні випадкові `LINK_SECRET` та `RATE_LIMIT_SALT`, не друкуючи значень у журнали. Чинні ключі зберігаються. Якщо `LINK_SECRET` відсутній, але в базі є розмови, сценарій зупиняється.
+5. Перевіряє сайт, API, створення кімнати, окремі права власника й гостя, переклад українська → англійська, синтетичне англійське аудіо → український переклад і збереження повідомлень.
+6. Видаляє лише створену ним тестову розмову. Адреса перевіреного сайту з'являється у підсумку GitHub Actions.
 
-## Перевірка після запуску
+Кожен запуск використовує одну тимчасову кімнату та два AI-повідомлення в межах установлених лімітів. Якщо безкоштовна квота вичерпана, перевірка повідомить про помилку. Сценарій не змінює план і не підключає оплату.
 
-1. Відкрийте `https://voxbridge-mvp.<ваш-піддомен>.workers.dev/api/health`. Очікується `{"ok":true,"aiConfigured":true,"aiProvider":"cloudflare-workers-ai"}`.
-2. Створіть розмову (українська ⇄ англійська), перевірте текстовий переклад.
-3. Відкрийте гостьове посилання на другому пристрої, надішліть відповідь.
-4. Перевірте голос із реального iPhone/Android. Моделі та формат аудіо треба перевірити вживу; автоматичні тести використовують імітацію AI.
-5. У Cloudflare Workers AI Dashboard перевірте витрачання безкоштовних Neurons.
+## Бюджет
 
-Cloudflare Workers AI на **Free** дає 10 000 Neurons на добу. Після вичерпання звернення до AI повертають помилку, без автоматичного переходу на платний тариф. У Workers, D1 і Cloudflare Builds є окремі безкоштовні ліміти.
+Залишайте **Workers Free**. Workers AI Free надає 10 000 Neurons на добу; після вичерпання квоти запити завершуються помилкою. Workers, D1 і GitHub Actions мають свої ліміти. Платні плани, купівля домену й OpenAI API для цього запуску не потрібні.
 
-## Альтернатива для розробника
+Синтетичний голосовий тест не замінює перевірку запису з мікрофона й озвучення на справжніх iPhone/Android.
 
-У репозиторії залишено ручну GitHub Action `Deploy VOXBRIDGE (manual)`. Вона потребує двох GitHub Secrets: `CLOUDFLARE_ACCOUNT_ID` та `CLOUDFLARE_API_TOKEN`. **Для нового користувача рекомендуємо спосіб вище**, де Cloudflare сам підключає GitHub.
-
-## Перед публічним поширенням
-- Справжні голосові переклади на різних телефонах **ще не перевірені**.
-- Потрібні контроль зловживань, юридична перевірка повідомлення про приватність і реальне тестування якості перекладів.
-- Посилання — секретні, але це не E2EE і не підтвердження особи.
-- Репозиторій зараз публічний. Ніколи не додавати в код паролі, токени чи секрети.
-
-Документація:
-- https://developers.cloudflare.com/workers/get-started/dashboard/
-- https://developers.cloudflare.com/workers/ci-cd/builds/configuration/
-- https://developers.cloudflare.com/workers/ci-cd/builds/limits-and-pricing/
+Офіційна документація:
+- https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/
+- https://developers.cloudflare.com/workers/authorization/workers/
+- https://developers.cloudflare.com/fundamentals/api/reference/permissions/
 - https://developers.cloudflare.com/workers-ai/platform/pricing/
+
+Альтернативний вбудований шлях: **Workers & Pages → Create application → Connect GitHub**, репозиторій `my-first-app`, гілка `main`, build `npm run build`, deploy `npx wrangler deploy`. Для цього шляху службові секрети потрібно додати в налаштуваннях Worker самостійно. Оберіть один спосіб автоматичного розгортання одного Worker.

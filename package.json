@@ -9,7 +9,7 @@
     "db:local": "wrangler d1 migrations apply voxbridge-db --local",
     "db:remote": "wrangler d1 migrations apply voxbridge-db --remote",
     "test": "node --test tests/*.test.js",
-    "check": "node --check src/index.js && node --check public/app.js && node --test tests/*.test.js",
+    "check": "node --check src/index.js && node --check public/app.js && node --check scripts/deploy-cloudflare.mjs && node --test tests/*.test.js",
     "build": "npm run check"
   },
   "devDependencies": {

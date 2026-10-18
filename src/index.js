@@ -304,7 +304,8 @@ async function deleteRoom(token,env) {
 function route(url, request, env) {
   const path = url.pathname;
   if (path === '/api/health' && request.method === 'GET')
-    return json({ok:true,aiConfigured:Boolean(env.AI?.run), aiProvider:'cloudflare-workers-ai'});
+    return json({ok:true,aiConfigured:Boolean(env.AI?.run), aiProvider:'cloudflare-workers-ai',
+      securityConfigured:Boolean(env.RATE_LIMIT_SALT?.length >= 20 && env.LINK_SECRET?.length >= 24)});
   if (path === '/api/rooms' && request.method === 'POST') return createRoom(request,env);
   const match = path.match(/^\/api\/session\/([a-f0-9]{64})(?:\/messages)?$/);
   if (!match) return fail('Route not found.',404);

@@ -1,6 +1,8 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "voxbridge-mvp",
+  "account_id": "f3dd4d2ecfdd0c89fdb864b0cb4e6dff",
+  "workers_dev": true,
   "main": "src/index.js",
   "compatibility_date": "2026-10-16",
   "assets": {

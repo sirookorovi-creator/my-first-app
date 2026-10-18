@@ -79,6 +79,16 @@ const url = path=>`https://voxbridge.example${path}`;
 const request = (path,method='GET',body=undefined,headers=undefined)=>new Request(url(path),{method,body,headers});
 const toJSON = (path,body)=>request(path,'POST',JSON.stringify(body),{'content-type':'application/json'});
 
+test('health reports application-secret readiness without exposing secret values',async()=>{
+  const e=env();
+  const healthy=await (await worker.fetch(request('/api/health'),e)).json();
+  assert.equal(healthy.securityConfigured,true);
+  delete e.LINK_SECRET;
+  const incomplete=await (await worker.fetch(request('/api/health'),e)).json();
+  assert.equal(incomplete.securityConfigured,false);
+  assert.ok(!JSON.stringify(incomplete).includes(e.RATE_LIMIT_SALT));
+});
+
 test('token entropy, deterministic hashes and safe configuration',async()=>{
   assert.match(testable.randomToken(),/^[0-9a-f]{64}$/);
   assert.notEqual(testable.randomToken(),testable.randomToken());
