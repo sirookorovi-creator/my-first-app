@@ -3,13 +3,21 @@ import assert from 'node:assert/strict';
 import worker, {testable} from '../src/index.js';
 
 class MockDB {
-  constructor() { this.rooms=[];this.messages=[];this.limits=new Map(); }
+  constructor() { this.rooms=[];this.messages=[];this.limits=new Map();this.schemaReady=true;this.schemaRuns=0; }
   prepare(sql) { return new MockStatement(this,sql); }
+  async exec(schemaSQL) {
+    for (const table of ['rooms','messages','limits'])
+      assert.ok(schemaSQL.includes('CREATE TABLE IF NOT EXISTS '+table), 'Missing D1 table: '+table);
+    this.schemaReady=true;
+    this.schemaRuns++;
+    return {count:5,duration:1};
+  }
 }
 class MockStatement {
   constructor(db,sql) { this.db=db;this.sql=sql.replace(/\s+/g,' ').trim();this.args=[]; }
   bind(...args) { this.args=args;return this; }
   async first() {
+    if(this.sql.includes('FROM sqlite_master')) return this.db.schemaReady?{name:'rooms'}:null;
     if(this.sql.includes('FROM rooms WHERE owner_token_hash')) {
       const [owner,guest]=this.args;return this.db.rooms.find(r=>r.owner_token_hash===owner||r.guest_token_hash===guest)||null;
     }
@@ -184,4 +192,18 @@ test('no paid OpenAI key needed, AI binding is required', async () => {
   const message=await worker.fetch(toJSON('/api/session/'+data.ownerToken+'/messages',{text:'Hello',consent:true}),e);
   assert.equal(message.status,503);
   assert.match((await message.json()).error,/Cloudflare AI/);
+});
+
+test('new D1 database initializes its schema without paid tokens or manual SQL', async () => {
+  const e = env();
+  e.DB.schemaReady = false;
+  const created = await worker.fetch(toJSON('/api/rooms',{ownerLanguage:'uk',guestLanguage:'en'}),e);
+  assert.equal(created.status,201);
+  assert.equal(e.DB.schemaReady,true);
+  assert.equal(e.DB.schemaRuns,1);
+  const again = await worker.fetch(request('/api/health'),e);
+  assert.equal(again.status,200);
+  assert.equal(e.DB.schemaRuns,1);
+  const health=await again.json();
+  assert.equal(health.aiProvider,'cloudflare-workers-ai');
 });
