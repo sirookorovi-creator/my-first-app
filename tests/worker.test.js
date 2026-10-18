@@ -217,3 +217,17 @@ test('base64 conversion preserves audio bytes across chunk boundaries', () => {
     assert.equal(encoded,Buffer.from(original).toString('base64'), 'Audio corruption at '+size+' bytes');
   }
 });
+
+
+test('room language fields accept only explicit supported string codes', async () => {
+  for (const lang of ['constructor','toString','__proto__','prototype',123,[],['uk'],{},null,'xx']) {
+    const e=env();
+    const res=await worker.fetch(toJSON('/api/rooms',{ownerLanguage:lang,guestLanguage:'en'}),e);
+    assert.equal(res.status,400,'Should reject invalid language: '+JSON.stringify(lang));
+    assert.equal(e.DB.rooms.length,0,'Invalid language must not create a room');
+    assert.equal(e.DB.limits.size,0,'Invalid language must not spend room quota');
+  }
+  const e=env();
+  const result=await worker.fetch(toJSON('/api/rooms',{ownerLanguage:'uk',guestLanguage:'en'}),e);
+  assert.equal(result.status,201);
+});
