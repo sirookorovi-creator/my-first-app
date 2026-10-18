@@ -138,3 +138,33 @@ test('security configuration missing causes explicit error rather than calls',as
   const res=await worker.fetch(toJSON('/api/rooms',{ownerLanguage:'uk',guestLanguage:'en'}),e);
   assert.equal(res.status,503);
 });
+
+
+test('invalid and oversized requests do not consume billable AI quota', async () => {
+  const e = env();
+  e.MAX_DAILY_AI_MESSAGES = '1';
+  e.MAX_DAILY_MESSAGES_PER_IP = '1';
+  const created = await (await worker.fetch(toJSON('/api/rooms', {ownerLanguage:'uk', guestLanguage:'en'}), e)).json();
+  const endpoint = '/api/session/' + created.ownerToken + '/messages';
+
+  assert.equal((await worker.fetch(toJSON(endpoint, {text:'hello', consent:false}), e)).status, 400);
+  assert.equal((await worker.fetch(toJSON(endpoint, {text:'x'.repeat(501), consent:true}), e)).status, 400);
+  assert.equal((await worker.fetch(toJSON(endpoint, null), e)).status, 400);
+  assert.equal((await worker.fetch(request(endpoint,'POST','x'.repeat(10_000),{'content-type':'application/json'}), e)).status, 413);
+
+  const large = new FormData();
+  large.append('consent','yes');
+  large.append('audio',new Blob([new Uint8Array(3_200_000)], {type:'audio/webm'}), 'huge.webm');
+  assert.equal((await worker.fetch(request(endpoint,'POST',large), e)).status, 413);
+
+  assert.equal((await worker.fetch(toJSON(endpoint, {text:'Привіт', consent:true}), e)).status, 201);
+  assert.equal((await worker.fetch(toJSON(endpoint, {text:'Привіт ще раз', consent:true}), e)).status, 429);
+});
+
+test('new-room API rejects invalid JSON types and oversized bodies cleanly', async () => {
+  const e = env();
+  assert.equal((await worker.fetch(toJSON('/api/rooms',null), e)).status, 400);
+  assert.equal((await worker.fetch(toJSON('/api/rooms',[]), e)).status, 400);
+  assert.equal((await worker.fetch(request('/api/rooms','POST','x'.repeat(20_000),{'content-type':'application/json'}),e)).status, 413);
+  assert.equal((await worker.fetch(toJSON('/api/rooms',{ownerLanguage:'uk',guestLanguage:'en'}), e)).status, 201);
+});
