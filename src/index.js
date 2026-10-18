@@ -206,9 +206,10 @@ async function createRoom(request, env) {
   try { data = await parseJSON(request); }
   catch (e) { return e instanceof PayloadTooLargeError ? fail('Request body is too large.',413) : fail('Invalid JSON.'); }
   if (!data || typeof data !== 'object' || Array.isArray(data)) return fail('Invalid JSON.');
-  const ownerLang = String(data.ownerLanguage || 'uk');
-  const guestLang = String(data.guestLanguage || 'en');
-  if (!LANGS[ownerLang] || !LANGS[guestLang] || ownerLang === guestLang)
+  const ownerLang = data.ownerLanguage === undefined ? 'uk' : data.ownerLanguage;
+  const guestLang = data.guestLanguage === undefined ? 'en' : data.guestLanguage;
+  if (typeof ownerLang !== 'string' || typeof guestLang !== 'string' ||
+      !Object.hasOwn(LANGS, ownerLang) || !Object.hasOwn(LANGS, guestLang) || ownerLang === guestLang)
     return fail('Choose two different supported languages.');
   if (!env.RATE_LIMIT_SALT || env.RATE_LIMIT_SALT.length < 20 || !env.LINK_SECRET || env.LINK_SECRET.length < 24)
     return fail('Server security settings are incomplete.',503);
