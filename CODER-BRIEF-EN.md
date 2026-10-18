@@ -1,27 +1,27 @@
-# Task for a coding agent — finish VOXBRIDGE MVP deployment
+# Coding brief — finish VOXBRIDGE with $0 hosting and AI spend
 
-You have a full-stack Cloudflare Worker + D1 voice translation prototype in this directory. Do not rebuild a landing page; the backend and frontend already exist.
+## Current architecture
+- Cloudflare Worker + Static Assets + D1. Worker, D1 and Workers AI must stay on the **Cloudflare Free** plan for now.
+- Server-side speech model: `@cf/openai/whisper-large-v3-turbo` through `env.AI.run`. Cloudflare-hosted — **not paid OpenAI API**.
+- Server-side text translation: `@cf/meta/m2m100-1.2b` through `env.AI.run`.
+- Browser speech synthesis for audio playback; two separate 64-character secret room links, AES-GCM encryption of guest link at rest.
+- Message text in D1, delete rooms after 7 days, input validation and conservative daily AI usage limits.
+- 13 selectable languages, English/Ukraine UI toggle.
+- D1 database ID already set in `wrangler.jsonc`. Never replace this with dummy production IDs.
 
-## Objective
-Publish a real working English-first mobile web app allowing two strangers to communicate with audio messages across language barriers, through a private invitation link, without accounts or installing an app.
+## Verification already performed
+GitHub Actions: mocked unit tests, local D1 migration, Wrangler dry-run build. They are NOT live speech or real inference tests.
 
-## Already implemented
-- Cloudflare Worker endpoints `/api/rooms`, `/api/session/:token`, `/api/session/:token/messages`, `DELETE /api/session/:token`
-- Two role-specific high-entropy tokens; guest token is AES-GCM encrypted at rest and returned only to room owner
-- D1 persistence and daily expired-record deletion
-- Browser MediaRecorder captures up to 25s audio; Worker sends to OpenAI transcription and translation APIs
-- Text fallback, translated speech via Web Speech API, chat UI, limits on rooms/messages/daily AI requests
-- Automated mocked Worker tests; see README-UK.md and run `npm run check`
-
-## Do next, in this order
-1. Install Wrangler and verify local D1 binding/migrations. Set local secrets as documented; do not commit any keys.
-2. Test real `gpt-4o-mini-transcribe` with WebM (Chrome) and MP4 (iOS Safari). Verify supported MIME types with OpenAI; fix format issues if needed.
-3. Run browser E2E tests for owner/guest share flows, refresh, voice recording and error states. Test on actual iPhone Safari and Android Chrome.
-4. Review and finalize the included privacy page and consent wording explaining audio is sent to an external provider, is not stored by the app, and text is stored at most seven days. Set access-control, no-index and referrer-policy headers for private pages.
-5. Add CAPTCHA or equivalent abuse control before broad public rollout, configure a strict AI usage budget and abuse alerts, and add durable audit/error instrumentation without logging tokens or voice contents.
-6. Evaluate whether 25 seconds is adequate; add audio duration verification server-side if costs require it. Add backend-side request body protections.
-7. Do not claim end-to-end encryption; these are shared secret links, not identity verified accounts. Add privacy-safe consent before recording.
-8. Deploy on a test `workers.dev` domain, run a real bidirectional voice conversation and document the exact results.
+## Next steps
+1. User authorizes Cloudflare access via two GitHub Actions secrets: `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. Do not ask user to paste token into chat or commit it.
+2. Deploy via explicit manual GitHub Action only. Do not subscribe to paid Cloudflare or other hosting or activate billing.
+3. Add runtime secrets `RATE_LIMIT_SALT` and `LINK_SECRET` in Cloudflare Worker settings. Do not rotate LINK_SECRET for live rooms without migration.
+4. Verify real M2M100 language pairs and Whisper WebM/MP4 browser recordings on iOS Safari and Android Chrome; handle unsupported formats without fake transcript.
+5. Check that Workers AI free 10,000 neuron daily allowance handles test workload. Beyond limits calls should fail without charges.
+6. Review user-facing privacy wording, add CAPTCHA/abuse protection before public invitation.
+7. Ensure legitimate consent before processing audio/text; do not promise E2EE.
 
 ## Release criteria
-No hardcoded provider secrets. No invented results or fake translations. Accurate supported language playback or text fallback. Separate owner/guest links. Expiration works. No uncontrolled billable AI traffic. Five external testers complete the two-way path. Collect conversion data only with consent and without storing identifiable contents unnecessarily.
+No credit card or OpenAI API keys required for the free pilot. No fake translations. Working two-way session on two real devices and manual test of deletion/expiry. If real audio/translations fail, report exact limitation and do not claim a working product.
+
+See `DEPLOY-UK.md` and `README-UK.md`.
