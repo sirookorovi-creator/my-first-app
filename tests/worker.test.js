@@ -207,3 +207,13 @@ test('new D1 database initializes its schema without paid tokens or manual SQL',
   const health=await again.json();
   assert.equal(health.aiProvider,'cloudflare-workers-ai');
 });
+
+
+test('base64 conversion preserves audio bytes across chunk boundaries', () => {
+  for (const size of [1,2,3,24_575,24_576,24_577,49_152,3_000_000]) {
+    const original = new Uint8Array(size);
+    for (let i=0;i<size;i++) original[i] = (i*17+131) & 255;
+    const encoded = testable.encodeAudioBase64(original);
+    assert.equal(encoded,Buffer.from(original).toString('base64'), 'Audio corruption at '+size+' bytes');
+  }
+});
