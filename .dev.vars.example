@@ -1,3 +1,2 @@
-OPENAI_API_KEY=sk-your-api-key
 RATE_LIMIT_SALT=replace-with-a-random-secret-of-at-least-20-characters
 LINK_SECRET=replace-with-a-different-secret-of-at-least-24-characters
