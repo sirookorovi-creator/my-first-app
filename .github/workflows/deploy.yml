@@ -47,7 +47,7 @@ jobs:
             const db = config.d1_databases?.find(x => x.binding === "DB");
             if (!db) throw Error("D1 binding DB missing");
             db.database_id = process.env.VOXBRIDGE_D1_DATABASE_ID;
-            fs.writeFileSync(file, JSON.stringify(config,null,2)+"\\n");
+            fs.writeFileSync(file, JSON.stringify(config,null,2)+"\n");
           '
 
       - name: Apply D1 migrations
