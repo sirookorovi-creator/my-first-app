@@ -20,3 +20,12 @@ test('beta static assets send anti-indexing and security headers', () => {
   assert.match(robots, /Disallow: \/\s*$/m);
   assert.match(html, /\/app\.js/);
 });
+
+test('first-launch schema remains synchronized with SQL migration', () => {
+  const source = readFileSync(new URL('../src/index.js',import.meta.url),'utf8');
+  const migration = readFileSync(new URL('../migrations/0001_init.sql',import.meta.url),'utf8');
+  const embedded = source.match(/await db\.exec\(`([\s\S]*?)`\);/);
+  assert.ok(embedded, 'Missing safe one-time D1 schema bootstrap');
+  const normalize = value => value.replace(/\s+/g,' ').replace(/\s*([(),;=])\s*/g,'$1').trim();
+  assert.equal(normalize(embedded[1]), normalize(migration));
+});
