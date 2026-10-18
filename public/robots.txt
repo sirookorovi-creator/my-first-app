@@ -1,0 +1,3 @@
+# VOXBRIDGE private beta: do not index until a reviewed public release.
+User-agent: *
+Disallow: /
