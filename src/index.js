@@ -291,11 +291,17 @@ async function addMessage(token, request, env) {
   const id = crypto.randomUUID(), timestamp=NOW();
   // The earlier count avoids spending AI quota when the room is already full.
   // Recheck inside the INSERT so simultaneous owner/guest sends cannot both
-  // cross the room limit after doing their AI work.
+  // cross the room limit after doing their AI work. The same atomic statement
+  // also refuses a late write if the room was deleted or expired meanwhile.
   const inserted = await env.DB.prepare(`INSERT INTO messages(id,room_id,speaker,original_text,translated_text,created_at)
-    SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM messages WHERE room_id = ?) < ?`)
-    .bind(id,auth.room.id,auth.role,transcript,translated,timestamp,auth.room.id,roomLimit).run();
-  if (!(inserted.meta?.changes||0)) return fail('This conversation reached its message limit.',429);
+    SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM rooms WHERE id = ? AND expires_at > ?)
+      AND (SELECT COUNT(*) FROM messages WHERE room_id = ?) < ?`)
+    .bind(id,auth.room.id,auth.role,transcript,translated,timestamp,auth.room.id,NOW(),auth.room.id,roomLimit).run();
+  if (!(inserted.meta?.changes||0)) {
+    if (!(await getAuthorizedRoom(token,env.DB)))
+      return fail('This conversation is invalid or has expired.',404);
+    return fail('This conversation reached its message limit.',429);
+  }
   return json({message:{id,speaker:auth.role,original:transcript,translated,createdAt:timestamp}},201);
 }
 

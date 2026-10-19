@@ -42,9 +42,11 @@ class MockStatement {
       return {meta:{changes:1}};
     }
     if(this.sql.startsWith('INSERT INTO messages')) {
-      const [id,room_id,speaker,original_text,translated_text,created_at,checkedRoom,maximum]=this.args;
+      const [id,room_id,speaker,original_text,translated_text,created_at,checkedRoom,minimumExpiry,countedRoom,maximum]=this.args;
       if (checkedRoom !== undefined) {
-        const count=this.db.messages.filter(m=>m.room_id===checkedRoom).length;
+        const room=this.db.rooms.find(r=>r.id===checkedRoom&&r.expires_at>minimumExpiry);
+        if(!room)return {meta:{changes:0}};
+        const count=this.db.messages.filter(m=>m.room_id===countedRoom).length;
         if(count>=maximum)return {meta:{changes:0}};
       }
       this.db.messages.push({id,room_id,speaker,original_text,translated_text,created_at});return {meta:{changes:1}};
@@ -262,4 +264,23 @@ test('simultaneous sends cannot exceed the per-room message limit', async () => 
   ]);
   assert.deepEqual(responses.map(r=>r.status).sort(),[201,429]);
   assert.equal(e.DB.messages.filter(m=>m.room_id===roomId).length,20);
+});
+
+test('a message finishing after its room is deleted is not written', async () => {
+  const e=env();
+  const created=await (await worker.fetch(toJSON('/api/rooms',{ownerLanguage:'uk',guestLanguage:'en'}),e)).json();
+  let releaseTranslation,markStarted;
+  const translationReleased=new Promise(resolve=>{releaseTranslation=resolve});
+  const translationStarted=new Promise(resolve=>{markStarted=resolve});
+  e.AI={run:async()=>{markStarted();await translationReleased;return {translated_text:'Hello'};}};
+
+  const sending=worker.fetch(toJSON(`/api/session/${created.guestToken}/messages`,{text:'Привіт',consent:true}),e);
+  await translationStarted;
+  const deleted=await worker.fetch(request(`/api/session/${created.ownerToken}`,'DELETE'),e);
+  assert.equal(deleted.status,200);
+  releaseTranslation();
+  const response=await sending;
+  assert.equal(response.status,404);
+  assert.equal(e.DB.rooms.length,0);
+  assert.equal(e.DB.messages.length,0);
 });
