@@ -271,8 +271,9 @@ async function addMessage(token, request, env) {
     audioFile = file;
   } else return fail('Send JSON text or multipart audio.');
 
+  const roomLimit = numberSetting(env,'MAX_MESSAGES_PER_ROOM',20,2,200);
   const total = await env.DB.prepare('SELECT COUNT(*) AS amount FROM messages WHERE room_id = ?').bind(auth.room.id).first();
-  if ((total?.amount||0) >= numberSetting(env,'MAX_MESSAGES_PER_ROOM',20,2,200))
+  if ((total?.amount||0) >= roomLimit)
     return fail('This conversation reached its message limit.',429);
   const ip = await requestIdentity(request, env);
   if (!(await rateLimit(env.DB,'message-ip',ip,numberSetting(env,'MAX_DAILY_MESSAGES_PER_IP',8,1,100))))
@@ -288,8 +289,13 @@ async function addMessage(token, request, env) {
   try { translated = await translateText(transcript,from,to,env.AI); }
   catch(e) { return fail(e.message,502); }
   const id = crypto.randomUUID(), timestamp=NOW();
-  await env.DB.prepare(`INSERT INTO messages(id,room_id,speaker,original_text,translated_text,created_at)
-    VALUES(?,?,?,?,?,?)`).bind(id,auth.room.id,auth.role,transcript,translated,timestamp).run();
+  // The earlier count avoids spending AI quota when the room is already full.
+  // Recheck inside the INSERT so simultaneous owner/guest sends cannot both
+  // cross the room limit after doing their AI work.
+  const inserted = await env.DB.prepare(`INSERT INTO messages(id,room_id,speaker,original_text,translated_text,created_at)
+    SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM messages WHERE room_id = ?) < ?`)
+    .bind(id,auth.room.id,auth.role,transcript,translated,timestamp,auth.room.id,roomLimit).run();
+  if (!(inserted.meta?.changes||0)) return fail('This conversation reached its message limit.',429);
   return json({message:{id,speaker:auth.role,original:transcript,translated,createdAt:timestamp}},201);
 }
 

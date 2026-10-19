@@ -42,7 +42,11 @@ class MockStatement {
       return {meta:{changes:1}};
     }
     if(this.sql.startsWith('INSERT INTO messages')) {
-      const [id,room_id,speaker,original_text,translated_text,created_at]=this.args;
+      const [id,room_id,speaker,original_text,translated_text,created_at,checkedRoom,maximum]=this.args;
+      if (checkedRoom !== undefined) {
+        const count=this.db.messages.filter(m=>m.room_id===checkedRoom).length;
+        if(count>=maximum)return {meta:{changes:0}};
+      }
       this.db.messages.push({id,room_id,speaker,original_text,translated_text,created_at});return {meta:{changes:1}};
     }
     if(this.sql.startsWith('DELETE FROM rooms')) {
@@ -240,4 +244,22 @@ test('room language fields accept only explicit supported string codes', async (
   const e=env();
   const result=await worker.fetch(toJSON('/api/rooms',{ownerLanguage:'uk',guestLanguage:'en'}),e);
   assert.equal(result.status,201);
+});
+
+test('simultaneous sends cannot exceed the per-room message limit', async () => {
+  const e=env();e.MAX_MESSAGES_PER_ROOM='20';
+  const created=await (await worker.fetch(toJSON('/api/rooms',{ownerLanguage:'uk',guestLanguage:'en'}),e)).json();
+  const roomId=e.DB.rooms[0].id;
+  for(let i=0;i<19;i++)e.DB.messages.push({id:`old-${i}`,room_id:roomId,speaker:'owner',original_text:'x',translated_text:'y',created_at:i});
+
+  let translations=0,release;
+  const bothReady=new Promise(resolve=>{release=resolve});
+  e.AI={run:async()=>{translations++;if(translations===2)release();await bothReady;return {translated_text:'Hello'};}};
+  const endpoint=`/api/session/${created.ownerToken}/messages`;
+  const responses=await Promise.all([
+    worker.fetch(toJSON(endpoint,{text:'Перше',consent:true}),e),
+    worker.fetch(toJSON(endpoint,{text:'Друге',consent:true}),e)
+  ]);
+  assert.deepEqual(responses.map(r=>r.status).sort(),[201,429]);
+  assert.equal(e.DB.messages.filter(m=>m.room_id===roomId).length,20);
 });
