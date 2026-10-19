@@ -17,9 +17,11 @@ function launchBrowserStub() {
     replaceChildren(...elements){this.children=[...elements]}
   });
   const document={
+    hidden:false,
     getElementById(id){if(!nodes.has(id))nodes.set(id,makeElement(id));return nodes.get(id)},
     createElement:makeElement,
-    querySelectorAll(){return []}
+    querySelectorAll(){return []},
+    addEventListener(){}
   };
   const speechSynthesis={
     cancel(){},getVoices(){return []},speak(utterance){spoken.push(utterance)}

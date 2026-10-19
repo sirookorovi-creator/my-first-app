@@ -22,7 +22,7 @@ function browser({microphone}={}) {
       replaceChildren(...elements){this.children=[...elements]}
     };
   };
-  const document={hidden:false,getElementById(id){if(!nodes.has(id))nodes.set(id,makeElement(id));return nodes.get(id)},createElement:makeElement,querySelectorAll:()=>[]};
+  const document={hidden:false,handlers:{},getElementById(id){if(!nodes.has(id))nodes.set(id,makeElement(id));return nodes.get(id)},createElement:makeElement,querySelectorAll:()=>[],addEventListener(event,fn){this.handlers[event]=fn}};
   document.getElementById('consent');
   class MediaRecorder {
     static isTypeSupported(){return true}
@@ -54,7 +54,7 @@ function browser({microphone}={}) {
     request.reply(data);
     await loading;
   }
-  return {client:context.client,nodes,requests,recorders,open};
+  return {client:context.client,document,nodes,requests,recorders,open};
 }
 
 test('the latest navigation wins when room responses arrive out of order',async()=>{
@@ -236,4 +236,23 @@ test('guest guidance stays role-correct when the interface language changes',asy
   assert.equal(nodes.get('shareTitle').textContent,'Відповідайте своєю мовою.');
   assert.match(nodes.get('shareHelp').textContent,/Відповідайте тут/);
   assert.doesNotMatch(nodes.get('shareHelp').textContent,/запрошення/i);
+});
+
+test('returning to a visible mobile tab refreshes immediately without overlapping polls',async()=>{
+  const {client,document,requests,open}=browser();
+  await open('a',room('A'));
+
+  document.hidden=true;
+  await document.handlers.visibilitychange();
+  assert.equal(requests.length,0,'a hidden tab must not poll');
+
+  document.hidden=false;
+  const first=document.handlers.visibilitychange();
+  assert.equal(requests.length,1,'returning to the tab must poll immediately');
+  const request=requests.shift();
+  const duplicate=client.refreshIfVisible();
+  assert.equal(requests.length,0,'an in-flight refresh must not be duplicated');
+  request.reply(room('A','B'));
+  await Promise.all([first,duplicate]);
+  assert.equal(client.state().room.messages.map(m=>m.id).join(','),'A,B');
 });
