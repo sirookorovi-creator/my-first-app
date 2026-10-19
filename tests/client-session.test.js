@@ -224,3 +224,16 @@ test('Enter used to confirm an IME composition does not send unfinished text',as
   request.reply({message:message('Japanese')});
   await Promise.resolve();
 });
+
+test('guest guidance stays role-correct when the interface language changes',async()=>{
+  const {nodes,open}=browser();
+  await open('guest',{...room(),role:'guest',guestToken:undefined});
+  assert.equal(nodes.get('shareTitle').textContent,'Reply in your language.');
+  assert.match(nodes.get('shareHelp').textContent,/Reply here/);
+  assert.equal(nodes.get('copyLink').classList.contains('hidden'),true);
+
+  nodes.get('uiToggle').handlers.click();
+  assert.equal(nodes.get('shareTitle').textContent,'Відповідайте своєю мовою.');
+  assert.match(nodes.get('shareHelp').textContent,/Відповідайте тут/);
+  assert.doesNotMatch(nodes.get('shareHelp').textContent,/запрошення/i);
+});
